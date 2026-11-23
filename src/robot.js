@@ -104,6 +104,7 @@ export class RobotController {
     this.moodTimer = null;
     this.sceneTimer = null;
     this.currentScene = null;
+    this.autoMoodPausedUntil = 0;
     this.autoMoodTimer = null;
     this.blinkTimer = null;
     this.glanceTimer = null;
@@ -530,17 +531,25 @@ export class RobotController {
     this.autoMoodEnabled = Boolean(enabled);
   }
 
+  pauseAutoMood(durationMs = 6000) {
+    const until = Date.now() + durationMs;
+    if (until > this.autoMoodPausedUntil) {
+      this.autoMoodPausedUntil = until;
+    }
+  }
+
   _scheduleNextAutoMood() {
-    // Spontaneous living expression + sound every 15–28 seconds while awake & idle
     const delay = 15_000 + Math.random() * 13_000;
     this.autoMoodTimer = window.setTimeout(() => {
       const canExpress =
         this.autoMoodEnabled &&
+        Date.now() >= this.autoMoodPausedUntil &&
         this.sleepState === "awake" &&
         !this.isAlert &&
         !this.isFocus &&
         !this.isMicLive &&
-        !this.currentMood;
+        !this.currentMood &&
+        !this.currentScene;
 
       if (canExpress) {
         const weightedPool = [

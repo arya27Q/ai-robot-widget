@@ -30,10 +30,12 @@ import {
 } from "./reminders.js";
 import { PomodoroManager } from "./pomodoro.js";
 import {
+  getCallName,
   getMoodLine,
   getTimeGreeting,
   getWakeLine,
   getWellnessNudge,
+  isGirlTheme,
 } from "./greetings.js";
 import {
   getAmbientState,
@@ -183,11 +185,19 @@ let lastPetXpAt = 0;
 
 initAudioUnlock();
 
-// Give each Buddy robot a distinct voice pitch so 2-robot dialogues sound like 2 unique characters!
-if (isBuddyWindow) {
-  const num = Number(buddyInjected?.num || urlParams.get("buddy") || 1);
-  setVoicePitch(num % 2 === 1 ? 1.18 : 0.88);
+function syncVoicePitchForTheme(theme) {
+  if (isGirlTheme(theme)) {
+    // Pink (sakura) & Purple (violet) -> cute higher feminine robot voice
+    setVoicePitch(theme === "sakura" ? 1.24 : 1.16);
+  } else if (isBuddyWindow) {
+    const num = Number(buddyInjected?.num || urlParams.get("buddy") || 1);
+    setVoicePitch(num % 2 === 1 ? 1.06 : 0.9);
+  } else {
+    setVoicePitch(1.0);
+  }
 }
+
+syncVoicePitchForTheme(prefs.theme);
 
 const games = new MiniGameManager();
 
@@ -201,12 +211,12 @@ const robot = new RobotController({
     if (source === "silent") return;
     if (!prefs.autoGreet && source === "auto") return;
     if (source === "manual" || Math.random() < 0.72) {
-      showGreeting(getMoodLine(mood), 3600);
+      showGreeting(getMoodLine(mood, prefs.theme), 3200);
     }
   },
   onWake: () => {
     if (prefs.autoGreet) {
-      showGreeting(getWakeLine(), 3800);
+      showGreeting(getWakeLine(prefs.theme), 3400);
     }
   },
   onPet: () => {
@@ -225,19 +235,22 @@ const swarm = new SwarmManager({
     Boolean(reminderManager.getActiveAlert()) ||
     pomodoro.getState().running ||
     robot.sleepState === "sleeping",
-  onSpeak: (mood, text, durationMs = 3400) => {
-    robot.triggerMood(mood, durationMs, { source: "silent" });
-    if (text) showGreeting(text, durationMs + 300);
+  onHoldBusy: (ms) => {
+    robot.pauseAutoMood(ms);
   },
-  onScene: (scene, text, durationMs = 2800, withConfetti = false) => {
+  onSpeak: (mood, text, durationMs = 2400) => {
+    robot.triggerMood(mood, durationMs, { source: "silent" });
+    if (text) showGreeting(text, durationMs + 250);
+  },
+  onScene: (scene, text, durationMs = 2200, withConfetti = false) => {
     robot.triggerScene(scene, durationMs);
     if (withConfetti) spawnNeonConfetti(confettiLayer, 18);
-    if (text) showGreeting(text, durationMs + 300);
+    if (text) showGreeting(text, durationMs + 250);
   },
-  onCheer: (mood, text) => {
+  onCheer: (mood, text, durationMs = 2300) => {
     spawnNeonConfetti(confettiLayer, 16);
-    robot.triggerMood(mood, 2500, { source: "silent" });
-    if (text) showGreeting(text, 3400);
+    robot.triggerMood(mood, durationMs, { source: "silent" });
+    if (text) showGreeting(text, durationMs + 300);
   },
   onPeersUpdated: (count) => {
     if (count > 0) {
@@ -249,7 +262,7 @@ const swarm = new SwarmManager({
   },
 });
 
-// Mutual 60fps eye contact: smoothly glance toward the nearest buddy robot
+// Mutual 60fps eye contact: smoothly glance toward the nearest buddy robot (fast 120ms)
 window.setInterval(() => {
   const nearest = swarm.getNearestPeerInfo();
   if (nearest && nearest.dist < 900) {
@@ -257,7 +270,7 @@ window.setInterval(() => {
   } else {
     robot.setPeerLookTarget(null, null);
   }
-}, 240);
+}, 120);
 
 const petManager = new PetManager({
   onChange: (state) => syncPetUI(state),
@@ -327,8 +340,9 @@ const sysMonitor = new SystemMonitor({
   },
   onLowBattery: (bat) => {
     if (!reminderManager.getActiveAlert()) {
-      robot.triggerMood("sad", 3600, { source: "silent" });
-      showGreeting(`Baterai laptop tinggal ${bat}%! Colok charger dulu bro.`, 5500);
+      const call = getCallName(prefs.theme);
+      robot.triggerMood("sad", 3200, { source: "silent" });
+      showGreeting(`Baterai laptop tinggal ${bat}%! Colok charger dulu ${call}.`, 5000);
     }
   },
   onPluggedIn: () => {
@@ -428,17 +442,17 @@ function startClockAndGreetings() {
   if (prefs.autoGreet) {
     window.setTimeout(() => {
       if (prefs.autoGreet && !reminderManager.getActiveAlert()) {
-        showGreeting(getTimeGreeting(), 5000);
+        showGreeting(getTimeGreeting(prefs.theme), 4500);
         robot.blink();
       }
-    }, 1600);
+    }, 1200);
   }
 
   window.setInterval(() => {
     if (!prefs.autoGreet || reminderManager.getActiveAlert() || pomodoro.getState().running) {
       return;
     }
-    showGreeting(getWellnessNudge(), 5500);
+    showGreeting(getWellnessNudge(prefs.theme), 5000);
   }, 18 * 60 * 1000);
 }
 
@@ -1019,7 +1033,12 @@ swatchBtns.forEach((btn) => {
     prefs.theme = btn.dataset.themePick;
     savePrefs();
     applyPrefsUI();
+    syncVoicePitchForTheme(prefs.theme);
     playConfirmTick();
+    const personaNote = isGirlTheme(prefs.theme)
+      ? "Halo bib! Mode warna manis & suara imut aktif!"
+      : "Siap bro! Warna & suara baru aktif!";
+    showGreeting(personaNote, 2800);
   });
 });
 
@@ -1045,7 +1064,7 @@ btnToggleGreet.addEventListener("click", () => {
   applyPrefsUI();
   playConfirmTick();
   if (prefs.autoGreet) {
-    showGreeting(getTimeGreeting(), 3500);
+    showGreeting(getTimeGreeting(prefs.theme), 3500);
   } else {
     hideGreeting();
   }
