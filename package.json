@@ -1,0 +1,20 @@
+{
+  "name": "ai-robot-reminder",
+  "version": "1.0.0",
+  "description": "Minimalist AI Robot Desktop Reminder Widget built with Tauri v2 and Vanilla JS",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.5.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
+    "vite": "^6.3.5"
+  }
+}
